@@ -78,10 +78,17 @@
               <button class="secondary-btn" @click="dailyTarget += 500">目标 +500</button>
             </div>
           </div>
-          <div class="overview-panel lucky-panel">
+          <div class="overview-panel lucky-panel" :class="{ animating: luckyAnimating }">
             <div class="overview-kicker">发财签</div>
             <p class="lucky-text">{{ luckyMessage }}</p>
-            <button class="primary-btn" @click="drawLucky">抽一签</button>
+            <div class="lucky-sparkles" aria-hidden="true">
+              <span class="spark spark-1"></span>
+              <span class="spark spark-2"></span>
+              <span class="spark spark-3"></span>
+            </div>
+            <button class="primary-btn lucky-draw-btn" :disabled="luckyAnimating" @click="drawLucky">
+              {{ luckyAnimating ? '开运中...' : '抽一签' }}
+            </button>
           </div>
           <div class="overview-panel tips-panel">
             <div class="overview-kicker">今日建议</div>
@@ -290,15 +297,36 @@
             <button class="secondary-btn" @click="exportPerformance">导出员工业绩 CSV</button>
           </div>
         </div>
-        <div class="card">
+        <div class="card report-summary-card">
           <h3 class="card-title">汇总</h3>
-          <p>充值总额：{{ money(reportSummary.total_recharge) }}</p>
-          <p>消费总额：{{ money(reportSummary.total_consume) }}</p>
-          <p>总会员：{{ reportSummary.total_customers || 0 }}</p>
-          <p>新增会员：{{ reportSummary.new_customers || 0 }}</p>
-          <p>活跃会员：{{ reportSummary.active_customers || 0 }}</p>
+          <div class="summary-metrics">
+            <div class="summary-item">
+              <div class="summary-label">充值总额</div>
+              <div class="summary-value">{{ money(reportSummary.total_recharge) }}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">消费总额</div>
+              <div class="summary-value">{{ money(reportSummary.total_consume) }}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">净收入</div>
+              <div class="summary-value">{{ money(Number(reportSummary.total_recharge || 0) - Number(reportSummary.total_consume || 0)) }}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">总会员</div>
+              <div class="summary-value">{{ reportSummary.total_customers || 0 }}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">新增会员</div>
+              <div class="summary-value">{{ reportSummary.new_customers || 0 }}</div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">活跃会员</div>
+              <div class="summary-value">{{ reportSummary.active_customers || 0 }}</div>
+            </div>
+          </div>
         </div>
-        <div class="card">
+        <div class="card report-service-card">
           <h3 class="card-title">服务分布</h3>
           <div v-if="serviceChartData.length" class="service-chart">
             <div v-for="row in serviceChartData" :key="row.serviceTypeId" class="service-chart-row">
@@ -465,6 +493,8 @@ const toast = ref('')
 const dailyTarget = ref(3000)
 const currentQuote = ref('把每一次服务做到位，财富会按时来敲门。')
 const luckyMessage = ref('今日宜稳扎稳打，客单自然上涨。')
+const luckyAnimating = ref(false)
+const autoVerifyCode = ref('')
 const rechargeMemberKeyword = ref('')
 const consumeMemberKeyword = ref('')
 const rechargeDropdownOpen = ref(false)
@@ -612,7 +642,14 @@ const luckyNotes = [
 ]
 
 function drawLucky() {
-  luckyMessage.value = luckyNotes[Math.floor(Math.random() * luckyNotes.length)]
+  if (luckyAnimating.value) return
+  luckyAnimating.value = true
+  setTimeout(() => {
+    luckyMessage.value = luckyNotes[Math.floor(Math.random() * luckyNotes.length)]
+  }, 220)
+  setTimeout(() => {
+    luckyAnimating.value = false
+  }, 980)
 }
 
 function openSystemDialog() {
@@ -744,6 +781,7 @@ function resetCustomerForm() {
   customerForm.verifyCode = ''
   customerForm.initialRechargeAmount = ''
   customerForm.remark = ''
+  autoVerifyCode.value = ''
 }
 
 function resetEmployeeForm() {
@@ -759,6 +797,10 @@ function resetServiceForm() {
 
 async function saveCustomer() {
   try {
+    if (!customerForm.id && !customerForm.verifyCode) {
+      customerForm.verifyCode = last4(customerForm.phone)
+      autoVerifyCode.value = customerForm.verifyCode
+    }
     if (customerForm.verifyCode && !/^\d{4}$/.test(customerForm.verifyCode)) {
       notify('校验码必须是4位数字')
       return
@@ -791,6 +833,7 @@ function editCustomer(c) {
   customerForm.verifyCode = c.verifyCode || ''
   customerForm.initialRechargeAmount = ''
   customerForm.remark = c.remark
+  autoVerifyCode.value = ''
 }
 
 async function toggleCustomer(id) {
@@ -896,8 +939,11 @@ function onConsumeMemberInput() {
 }
 
 function syncVerifyCodeByPhone() {
-  if (!customerForm.id && !customerForm.verifyCode) {
+  if (customerForm.id) return
+  const current = String(customerForm.verifyCode || '').trim()
+  if (!current || current === autoVerifyCode.value) {
     customerForm.verifyCode = last4(customerForm.phone)
+    autoVerifyCode.value = customerForm.verifyCode
   }
 }
 
@@ -1331,6 +1377,63 @@ textarea {
   justify-content: center;
   align-items: center;
   text-align: center;
+  overflow: hidden;
+}
+
+.lucky-panel.animating {
+  animation: luckyPulse 0.95s ease;
+}
+
+.lucky-draw-btn {
+  position: relative;
+  z-index: 2;
+}
+
+.lucky-sparkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.spark {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  opacity: 0;
+  background: radial-gradient(circle at 30% 30%, #fff 0%, #c7d2fe 40%, #6366f1 100%);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.45);
+}
+
+.spark-1 {
+  left: 30%;
+  top: 62%;
+}
+
+.spark-2 {
+  left: 52%;
+  top: 58%;
+}
+
+.spark-3 {
+  left: 72%;
+  top: 64%;
+}
+
+.lucky-panel.animating .spark-1 {
+  animation: luckySpark 0.9s ease-out 0.08s;
+}
+
+.lucky-panel.animating .spark-2 {
+  animation: luckySpark 0.9s ease-out 0.16s;
+}
+
+.lucky-panel.animating .spark-3 {
+  animation: luckySpark 0.9s ease-out 0.24s;
+}
+
+.lucky-panel.animating .lucky-text {
+  animation: luckyFlip 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .overview-kicker {
@@ -1512,9 +1615,61 @@ th {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 320px;
+  height: 100%;
   overflow: auto;
   padding-right: 4px;
+}
+
+.report-summary-card,
+.report-service-card {
+  height: 192px;
+  min-height: 192px;
+}
+
+.report-service-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.report-service-card .service-chart {
+  flex: 1;
+  min-height: 0;
+}
+
+.report-summary-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-metrics {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.summary-item {
+  border: 1px solid #e4e8ff;
+  background: linear-gradient(180deg, #fbfcff, #f4f6ff);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.summary-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  margin-bottom: 4px;
+}
+
+.summary-value {
+  color: #4338ca;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .service-chart-row {
@@ -1555,6 +1710,53 @@ th {
   color: #4338ca;
   font-weight: 600;
   white-space: nowrap;
+}
+
+@keyframes luckyPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(79, 70, 229, 0);
+    transform: translateY(0);
+  }
+  35% {
+    box-shadow: 0 0 0 10px rgba(79, 70, 229, 0.08), 0 10px 22px rgba(79, 70, 229, 0.22);
+    transform: translateY(-1px);
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(79, 70, 229, 0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes luckyFlip {
+  0% {
+    opacity: 0.25;
+    transform: rotateX(70deg) scale(0.96);
+    filter: blur(0.5px);
+  }
+  45% {
+    opacity: 1;
+    transform: rotateX(-10deg) scale(1.02);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: rotateX(0) scale(1);
+  }
+}
+
+@keyframes luckySpark {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.5);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(-10px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.7);
+  }
 }
 
 .toast {
@@ -1608,6 +1810,10 @@ th {
 
   .content-grid {
     grid-template-columns: 1fr;
+  }
+
+  .summary-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>
