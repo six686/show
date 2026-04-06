@@ -33,7 +33,7 @@ jobs:
         New-Item -ItemType Directory -Force -Path target\jpackage-input
         Copy-Item target\ddmo-1.0.0-exec.jar target\jpackage-input\
       shell: pwsh
-    - name: Package EXE with jpackage
+    - name: Package with jpackage
       run: |
         & "$env:JAVA_HOME\bin\jpackage.exe" `
           --type app-image `
@@ -44,8 +44,8 @@ jobs:
           --dest dist `
           --java-options "-Xmx512m"
       shell: pwsh
-    - name: Upload EXE Artifact
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Show-Installer
-        path: dist/Show.exe
+        name: Show-App
+        path: dist/Show   # 上传整个应用目录
