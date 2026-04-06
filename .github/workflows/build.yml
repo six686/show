@@ -53,7 +53,7 @@ jobs:
           --java-options "-Dloader.main=com.ddmo.app.DdmoLauncher" `
           --win-console `
           --module-path "$env:JAVA_HOME\jmods" `
-          --add-modules javafx.controls,javafx.web,javafx.base
+          --add-modules javafx.controls,javafx.web,javafx.base,java.logging,java.sql
       shell: pwsh
 
     - name: Upload full app
