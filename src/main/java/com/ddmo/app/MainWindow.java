@@ -47,13 +47,15 @@ public class MainWindow extends Application {
         // 创建无边框透明窗口
         stage.initStyle(StageStyle.TRANSPARENT);
         stage.setTitle("Show");
+        stage.setMinWidth(900);   // 最小宽度
+        stage.setMinHeight(700);  // 最小高度
 
         // 创建 WebView 并设置透明背景
         WebView webView = new WebView();
         webView.setContextMenuEnabled(false);
         WebEngine webEngine = webView.getEngine();
 
-        // 页面加载完成后注入 JavaScript Bridge 以及设置背景透明 (JavaFX 17 兼容方案)
+        // 页面加载完成后注入 JavaScript Bridge 以及设置背景透明 (JavaFX 17 兼容方案) 并禁止 JS 调整窗口
         webEngine.getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
             if (newState == Worker.State.SUCCEEDED) {
                 JSObject window = (JSObject) webEngine.executeScript("window");
@@ -63,6 +65,12 @@ public class MainWindow extends Application {
                     "if(window.onDdmoBridgeReady) window.onDdmoBridgeReady();"
                 );
 
+                // 阻止 JavaScript 调整窗口大小（增强保护）
+                webEngine.executeScript(
+                    "window.resizeTo = function() { console.warn('resizeTo blocked'); }; " +
+                    "window.moveTo = function() { console.warn('moveTo blocked'); };"
+                );
+                
                 // 设置 WebView 背景透明 (尝试多种方案以确保兼容性)
                 try {
                     // 方案 1: 反射调用 page.setBackgroundColor
@@ -133,6 +141,17 @@ public class MainWindow extends Application {
 
         Scene scene = new Scene(root, 1200, 800);
         scene.setFill(Color.TRANSPARENT);
+
+         // 最大化时锁定窗口尺寸，防止下拉框导致窗口缩小
+        stage.maximizedProperty().addListener((obs, wasMax, isMax) -> {
+            if (isMax) {
+                stage.setMaxWidth(stage.getWidth());
+                stage.setMaxHeight(stage.getHeight());
+            } else {
+                stage.setMaxWidth(Double.MAX_VALUE);
+                stage.setMaxHeight(Double.MAX_VALUE);
+            }
+        });
 
         stage.setScene(scene);
         stage.centerOnScreen();
