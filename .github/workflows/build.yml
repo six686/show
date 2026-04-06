@@ -33,7 +33,7 @@ jobs:
         New-Item -ItemType Directory -Force -Path target\jpackage-input
         Copy-Item target\ddmo-1.0.0-exec.jar target\jpackage-input\
       shell: pwsh
-    - name: Package with jpackage
+    - name: Package with jpackage (Console)
       run: |
         & "$env:JAVA_HOME\bin\jpackage.exe" `
           --type app-image `
@@ -42,7 +42,8 @@ jobs:
           --main-class com.ddmo.app.DdmoLauncher `
           --name Show `
           --dest dist `
-          --java-options "-Xmx512m"
+          --java-options "-Xmx512m" `
+          --win-console
       shell: pwsh
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
