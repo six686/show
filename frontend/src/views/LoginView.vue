@@ -8,7 +8,7 @@
           <div class="brand-logo">
             <img src="@/assets/logo.png" alt="Show Logo" width="80" />
           </div>
-          <h1 class="brand-name">Show</h1>
+          <h1 class="brand-name">Flower</h1>
           <p class="brand-slogan">以花为伴，传递美好</p>
         </div>
 
