@@ -11,12 +11,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up JDK 17 (with JavaFX)
+    - name: Set up JDK 17 (Liberica with JavaFX)
       uses: actions/setup-java@v4
       with:
         java-version: '17'
-        distribution: 'zulu'
-        java-package: 'jdkfx'
+        distribution: 'liberica'
+        java-package: 'jdk+fx'
 
     - name: Set up Node.js
       uses: actions/setup-node@v4
