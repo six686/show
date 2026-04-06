@@ -10,46 +10,54 @@ jobs:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Set up JDK 17
+
+    - name: Set up JDK 17 (with JavaFX)
       uses: actions/setup-java@v4
       with:
         java-version: '17'
-        distribution: 'temurin'
+        distribution: 'zulu'
+        java-package: 'jdkfx'
+
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
+
     - name: Build Frontend
       run: |
         cd frontend
         npm install
         npm run build
       shell: pwsh
+
     - name: Build Backend JAR
       run: mvn clean package -DskipTests
       shell: pwsh
+
     - name: Prepare jpackage input
       run: |
         New-Item -ItemType Directory -Force -Path target\jpackage-input
         Copy-Item target\ddmo-1.0.0-exec.jar target\jpackage-input\
       shell: pwsh
+
     - name: Package with jpackage
       run: |
         & "$env:JAVA_HOME\bin\jpackage.exe" `
           --type app-image `
           --input target\jpackage-input `
-         --main-jar ddmo-1.0.0-exec.jar `
-         --main-class org.springframework.boot.loader.JarLauncher `
-         --name Show `
-         --dest dist `
-         --java-options "-Xmx512m" `
-         --java-options "-Dloader.main=com.ddmo.app.DdmoLauncher" `
-         --win-console `
-         --module-path "$env:JAVA_HOME\jmods" `
-         --add-modules javafx.controls,javafx.web,javafx.base
+          --main-jar ddmo-1.0.0-exec.jar `
+          --main-class org.springframework.boot.loader.JarLauncher `
+          --name Show `
+          --dest dist `
+          --java-options "-Xmx512m" `
+          --java-options "-Dloader.main=com.ddmo.app.DdmoLauncher" `
+          --win-console `
+          --module-path "$env:JAVA_HOME\jmods" `
+          --add-modules javafx.controls,javafx.web,javafx.base
       shell: pwsh
-    - name: Upload Artifact
+
+    - name: Upload full app
       uses: actions/upload-artifact@v4
       with:
         name: Show-App
-        path: dist/Show   # 上传整个应用目录
+        path: dist/Show
