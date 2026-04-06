@@ -1,0 +1,51 @@
+name: Build Show.exe
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    - name: Build Frontend
+      run: |
+        cd frontend
+        npm install
+        npm run build
+      shell: pwsh
+    - name: Build Backend JAR
+      run: mvn clean package -DskipTests
+      shell: pwsh
+    - name: Prepare jpackage input
+      run: |
+        New-Item -ItemType Directory -Force -Path target\jpackage-input
+        Copy-Item target\ddmo-1.0.0-exec.jar target\jpackage-input\
+      shell: pwsh
+    - name: Package EXE with jpackage
+      run: |
+        & "$env:JAVA_HOME\bin\jpackage.exe" `
+          --type app-image `
+          --input target\jpackage-input `
+          --main-jar ddmo-1.0.0-exec.jar `
+          --main-class com.ddmo.app.DdmoLauncher `
+          --name Show `
+          --dest dist `
+          --java-options "-Xmx512m"
+      shell: pwsh
+    - name: Upload EXE Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Show-Installer
+        path: dist/Show.exe
