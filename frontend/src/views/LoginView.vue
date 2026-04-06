@@ -9,7 +9,7 @@
             <img src="@/assets/logo.png" alt="Show Logo" width="80" />
           </div>
           <h1 class="brand-name">Show</h1>
-          <p class="brand-slogan">剪发更专注，管店更轻松</p>
+          <p class="brand-slogan">以花为伴，传递美好</p>
         </div>
 
         <div class="brand-features">
