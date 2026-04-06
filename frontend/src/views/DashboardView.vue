@@ -9,7 +9,7 @@
         </div>
         <div class="profile-info">
           <div class="profile-name">店长</div>
-          <div class="profile-role">理发店会员系统</div>
+          <div class="profile-role">六六花艺会员系统</div>
         </div>
       </div>
 
