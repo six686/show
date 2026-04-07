@@ -20,6 +20,7 @@ import netscape.javascript.JSObject;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Base64;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * JavaFX 无边框窗口，内嵌 WebView 加载 Vue SPA。
@@ -35,6 +36,8 @@ public class MainWindow extends Application {
      * 必须保持强引用，避免被 GC 回收。
      */
     private JavaBridge javaBridge;
+    // 用户主动操作标志，用于区分用户点击最大化/还原和下拉框等组件误触发
+    private final AtomicBoolean userAction = new AtomicBoolean(false);
 
     @Override
     public void start(Stage stage) {
@@ -142,14 +145,21 @@ public class MainWindow extends Application {
         Scene scene = new Scene(root, 1200, 800);
         scene.setFill(Color.TRANSPARENT);
 
-         // 最大化时锁定窗口尺寸，防止下拉框导致窗口缩小
-        stage.maximizedProperty().addListener((obs, wasMax, isMax) -> {
-            if (isMax) {
-                stage.setMaxWidth(stage.getWidth());
-                stage.setMaxHeight(stage.getHeight());
+        // 最大化监听器：用户主动操作时允许退出最大化，误触发时强制恢复最大化
+        stage.maximizedProperty().addListener((obs, wasMax, isNowMax) -> {
+            if (isNowMax) {
+                stage.setResizable(false);
+            } else if (wasMax && !isNowMax) {
+                // 如果不是用户主动操作，则延迟恢复最大化
+                if (!userAction.getAndSet(false)) {
+                    Platform.runLater(() -> {
+                        if (!stage.isMaximized()) {
+                            stage.setMaximized(true);
+                        }
+                    });
+                }
             } else {
-                stage.setMaxWidth(Double.MAX_VALUE);
-                stage.setMaxHeight(Double.MAX_VALUE);
+                stage.setResizable(true);
             }
         });
 
@@ -176,8 +186,9 @@ public class MainWindow extends Application {
             Platform.runLater(() -> primaryStage.setIconified(true));
         }
 
-        /** 最大化 / 还原窗口 */
+        /** 最大化 / 还原窗口（用户主动操作） */
         public void maximize() {
+            userAction.set(true);
             Platform.runLater(() -> primaryStage.setMaximized(!primaryStage.isMaximized()));
         }
 
@@ -196,6 +207,7 @@ public class MainWindow extends Application {
             Platform.runLater(() -> {
                 // 如果窗口是最大化的，先还原
                 if (primaryStage.isMaximized()) {
+                    userAction.set(true); // 拖动时先还原窗口，属于用户主动操作
                     primaryStage.setMaximized(false);
                     // 将窗口中心移到鼠标位置
                     primaryStage.setX(screenX - primaryStage.getWidth() / 2);
