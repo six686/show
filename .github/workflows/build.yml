@@ -30,6 +30,24 @@ jobs:
         npm run build
       shell: pwsh
 
+    # 新增：配置 Maven 镜像（阿里云）
+    - name: Configure Maven mirrors
+      run: |
+        mkdir -p ~/.m2
+        cat > ~/.m2/settings.xml << 'EOF'
+        <settings>
+          <mirrors>
+            <mirror>
+              <id>aliyunmaven</id>
+              <name>Aliyun Maven</name>
+              <url>https://maven.aliyun.com/repository/public</url>
+              <mirrorOf>central</mirrorOf>
+            </mirror>
+          </mirrors>
+        </settings>
+        EOF
+      shell: bash
+
     - name: Build Backend JAR
       run: mvn clean package -DskipTests
       shell: pwsh
