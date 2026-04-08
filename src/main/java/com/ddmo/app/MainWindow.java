@@ -1,6 +1,5 @@
 package com.ddmo.app;
 
-import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.concurrent.Worker;
@@ -21,58 +20,67 @@ import netscape.javascript.JSObject;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Base64;
-import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * JavaFX 无边框窗口，内嵌 WebView 加载 Vue SPA。
+ */
 public class MainWindow extends Application {
 
     private Stage primaryStage;
     private double xOffset = 0;
     private double yOffset = 0;
+
+    /**
+     * Java-JavaScript Bridge，供前端调用窗口操作。
+     * 必须保持强引用，避免被 GC 回收。
+     */
     private JavaBridge javaBridge;
-    private final AtomicBoolean userAction = new AtomicBoolean(false);
-    private AnimationTimer keepMaximizedTimer = null;
 
     @Override
     public void start(Stage stage) {
         this.primaryStage = stage;
         this.javaBridge = new JavaBridge();
 
+        // 启动 SpringBoot
         DdmoApplication.startInBackground(getParameters().getRaw().toArray(new String[0]));
 
+        // 创建无边框透明窗口
         stage.initStyle(StageStyle.TRANSPARENT);
         stage.setTitle("Show");
-        stage.setMinWidth(900);
-        stage.setMinHeight(700);
 
+        // 创建 WebView 并设置透明背景
         WebView webView = new WebView();
         webView.setContextMenuEnabled(false);
         WebEngine webEngine = webView.getEngine();
 
+        // 页面加载完成后注入 JavaScript Bridge 以及设置背景透明 (JavaFX 17 兼容方案)
         webEngine.getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
             if (newState == Worker.State.SUCCEEDED) {
                 JSObject window = (JSObject) webEngine.executeScript("window");
                 window.setMember("ddmo", javaBridge);
+                // 通知前端 bridge 已就绪
                 webEngine.executeScript(
                     "if(window.onDdmoBridgeReady) window.onDdmoBridgeReady();"
                 );
 
-                webEngine.executeScript(
-                    "window.resizeTo = function() { console.warn('resizeTo blocked'); }; " +
-                    "window.moveTo = function() { console.warn('moveTo blocked'); };"
-                );
-
+                // 设置 WebView 背景透明 (尝试多种方案以确保兼容性)
                 try {
+                    // 方案 1: 反射调用 page.setBackgroundColor
                     java.lang.reflect.Field field = webEngine.getClass().getDeclaredField("page");
                     field.setAccessible(true);
                     Object page = field.get(webEngine);
                     java.lang.reflect.Method setBackgroundColor = page.getClass().getDeclaredMethod("setBackgroundColor", int.class);
                     setBackgroundColor.setAccessible(true);
-                    setBackgroundColor.invoke(page, 0);
+                    setBackgroundColor.invoke(page, 0); // 0 = transparent
+                    
+                    // 方案 2: 尝试直接调用 setPageFill (虽然 17 可能没有，但某些定制版本可能有)
                     try {
                         java.lang.reflect.Method setPageFill = webView.getClass().getMethod("setPageFill", javafx.scene.paint.Paint.class);
                         setPageFill.invoke(webView, Color.TRANSPARENT);
-                    } catch (Exception e2) { }
-                } catch (Exception e) { }
+                    } catch (Exception e2) {}
+                } catch (Exception e) {
+                    // ignore
+                }
             }
         });
 
@@ -92,68 +100,39 @@ public class MainWindow extends Application {
             "@keyframes ddmo-fade{from{opacity:0.3}to{opacity:1}}" +
             "</style></head><body>" +
             "<div class='splash-container'><div class='ddmo-spinner'><span class='ddmo-logo'>Show</span></div><div class='ddmo-text'>咻，咻咻...</div></div></body></html>";
-
+        
+        // 在 SpringBoot 加载完成前，先展示极速启动页（Splash Screen），与前端 loader 保持完全一致
         webEngine.loadContent(splashHtml);
 
+        // 等待 SpringBoot 启动完成后加载真实页面
         DdmoApplication.getPortFuture().thenAccept(port -> {
             Platform.runLater(() -> {
                 webEngine.load("http://localhost:" + port);
             });
         });
 
+        // 布局
         StackPane root = new StackPane(webView);
+
+        // 窗口圆角半径：12px - 与前端 global.css 中的 --radius-window 保持一致
         double windowRadius = 12.0;
+
+        // 设置圆角背景
         Background roundedBackground = new Background(
             new BackgroundFill(Color.WHITE, new CornerRadii(windowRadius), null)
         );
         root.setBackground(roundedBackground);
 
+        // 裁剪 WebView 内容为圆角
         Rectangle clip = new Rectangle();
-        clip.setArcWidth(windowRadius * 2);
-        clip.setArcHeight(windowRadius * 2);
+        clip.setArcWidth(windowRadius * 2);  // 圆角宽度 = 半径 × 2
+        clip.setArcHeight(windowRadius * 2); // 圆角高度 = 半径 × 2
         clip.widthProperty().bind(root.widthProperty());
         clip.heightProperty().bind(root.heightProperty());
         root.setClip(clip);
 
         Scene scene = new Scene(root, 1300, 750);
         scene.setFill(Color.TRANSPARENT);
-
-        // 最大化监听器 + 持续监控定时器
-        stage.maximizedProperty().addListener((obs, wasMax, isNowMax) -> {
-            if (isNowMax) {
-                stage.setResizable(false);
-                if (keepMaximizedTimer == null) {
-                    keepMaximizedTimer = new AnimationTimer() {
-                        @Override
-                        public void handle(long now) {
-                            // 如果窗口不是最大化且没有用户主动操作，则立即恢复最大化
-                            if (!stage.isMaximized() && !userAction.get()) {
-                                stage.setMaximized(true);
-                            }
-                        }
-                    };
-                    keepMaximizedTimer.start();
-                }
-            } else if (wasMax && !isNowMax) {
-                if (!userAction.getAndSet(false)) {
-                    // 非用户操作（如下拉框触发的退出最大化），立即恢复
-                    stage.setMaximized(true);
-                } else {
-                    // 用户主动退出最大化，停止监控
-                    if (keepMaximizedTimer != null) {
-                        keepMaximizedTimer.stop();
-                        keepMaximizedTimer = null;
-                    }
-                    stage.setResizable(true);
-                }
-            } else {
-                stage.setResizable(true);
-                if (keepMaximizedTimer != null) {
-                    keepMaximizedTimer.stop();
-                    keepMaximizedTimer = null;
-                }
-            }
-        });
 
         stage.setScene(scene);
         stage.centerOnScreen();
@@ -167,17 +146,23 @@ public class MainWindow extends Application {
         System.exit(0);
     }
 
+    /**
+     * JavaScript Bridge — 暴露给前端的窗口操作接口。
+     * 前端通过 window.ddmo.xxx() 调用。
+     */
     public class JavaBridge {
 
+        /** 最小化窗口 */
         public void minimize() {
             Platform.runLater(() -> primaryStage.setIconified(true));
         }
 
+        /** 最大化 / 还原窗口 */
         public void maximize() {
-            userAction.set(true);
             Platform.runLater(() -> primaryStage.setMaximized(!primaryStage.isMaximized()));
         }
 
+        /** 关闭窗口 */
         public void close() {
             Platform.runLater(() -> {
                 primaryStage.close();
@@ -187,11 +172,13 @@ public class MainWindow extends Application {
             });
         }
 
+        /** 开始拖动 — 记录鼠标偏移 */
         public void startDrag(double screenX, double screenY) {
             Platform.runLater(() -> {
+                // 如果窗口是最大化的，先还原
                 if (primaryStage.isMaximized()) {
-                    userAction.set(true);
                     primaryStage.setMaximized(false);
+                    // 将窗口中心移到鼠标位置
                     primaryStage.setX(screenX - primaryStage.getWidth() / 2);
                     primaryStage.setY(screenY - 20);
                 }
@@ -200,6 +187,7 @@ public class MainWindow extends Application {
             });
         }
 
+        /** 拖动中 — 移动窗口 */
         public void drag(double screenX, double screenY) {
             Platform.runLater(() -> {
                 primaryStage.setX(screenX - xOffset);
@@ -207,10 +195,18 @@ public class MainWindow extends Application {
             });
         }
 
+        /** 获取最大化状态 */
         public boolean isMaximized() {
             return primaryStage.isMaximized();
         }
 
+        /**
+         * 保存前端传入的 Base64 文件内容到本地。
+         *
+         * @param suggestedName 建议文件名（如 customers.csv）
+         * @param base64Data    文件内容的 Base64 字符串（不带 data: 前缀）
+         * @return 保存是否成功（用户取消或异常均返回 false）
+         */
         public boolean saveFile(String suggestedName, String base64Data) {
             if (base64Data == null || base64Data.isBlank()) {
                 return false;
