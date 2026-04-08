@@ -51,7 +51,6 @@ jobs:
           --dest dist `
           --java-options "-Xmx512m" `
           --java-options "-Dloader.main=com.ddmo.app.DdmoLauncher" `
-          --win-console `
           --module-path "$env:JAVA_HOME\jmods" `
           --add-modules java.se,javafx.controls,javafx.web,javafx.base
       shell: pwsh
